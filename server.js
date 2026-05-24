@@ -65,8 +65,7 @@ function deltaE([r1, g1, b1], [r2, g2, b2]) {
 
 function selectBestPens(pixels, n) {
   const scores = new Array(PEN_COLORS.length).fill(0);
-  const step = Math.max(1, Math.floor(pixels.length / 800));
-  for (let i = 0; i < pixels.length; i += step) {
+  for (let i = 0; i < pixels.length; i++) {
     let best = 0,
       bestD = Infinity;
     PEN_COLORS.forEach((pen, j) => {
@@ -110,9 +109,8 @@ async function generatePuzzle({ imageBuffer, cols, nColors }) {
   const preprocessed = await sharp(imageBuffer)
     .rotate() // correct EXIF orientation
     .normalise() // auto levels / stretch histogram
-    .modulate({ saturation: 1.3 }) // boost saturation for vivid colors
-    .sharpen({ sigma: 0.8 }) // sharpen edges for cleaner regions
-    .toBuffer();
+    .modulate({ saturation: 1.1 }) // mild saturation lift
+    .toBuffer(); // no pre-sharpen — we want smooth regions for painting
 
   const meta = await sharp(preprocessed).metadata();
   const aspect = meta.height / meta.width;
@@ -120,6 +118,8 @@ async function generatePuzzle({ imageBuffer, cols, nColors }) {
 
   const { data } = await sharp(preprocessed)
     .resize(cols, rows, { fit: "fill", kernel: "lanczos3" })
+    .median(3) // 1st pass: suppress JPEG/compression noise at grid scale
+    .median(3) // 2nd pass: merge small colour clusters into solid regions
     .flatten({ background: { r: 255, g: 255, b: 255 } })
     .toColorspace("srgb")
     .raw()
@@ -130,7 +130,82 @@ async function generatePuzzle({ imageBuffer, cols, nColors }) {
     pixels.push([data[i], data[i + 1], data[i + 2]]);
 
   const activePens = selectBestPens(pixels, nColors);
-  const indexed = pixels.map((p) => nearestPen(p, activePens));
+
+  // Very-mild dithering (0.12×) — just enough to soften hard colour edges
+  // at region boundaries.  At this strength it cannot cascade into wrong
+  // colours; large flat areas (background, face) stay solid.
+  const DITHER = 0.12;
+  const grid = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => pixels[r * cols + c].slice()),
+  );
+  const indexed = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = grid[r][c];
+      const penIdx = nearestPen(px, activePens);
+      indexed.push(penIdx);
+      const pen = activePens[penIdx];
+      const eR = (px[0] - pen.rgb[0]) * DITHER;
+      const eG = (px[1] - pen.rgb[1]) * DITHER;
+      const eB = (px[2] - pen.rgb[2]) * DITHER;
+      for (const [nr, nc, f] of [
+        [r, c + 1, 7 / 16],
+        [r + 1, c - 1, 3 / 16],
+        [r + 1, c, 5 / 16],
+        [r + 1, c + 1, 1 / 16],
+      ]) {
+        if (nr < rows && nc >= 0 && nc < cols) {
+          grid[nr][nc][0] = Math.max(
+            0,
+            Math.min(255, grid[nr][nc][0] + eR * f),
+          );
+          grid[nr][nc][1] = Math.max(
+            0,
+            Math.min(255, grid[nr][nc][1] + eG * f),
+          );
+          grid[nr][nc][2] = Math.max(
+            0,
+            Math.min(255, grid[nr][nc][2] + eB * f),
+          );
+        }
+      }
+    }
+  }
+
+  // ── Region-smoothing: 4 passes ────────────────────────────────────────
+  // A cell is "noisy" when ≤ 1 of its 8 neighbours share its colour.
+  // That covers lone specks AND 2-cell clusters — the most visible noise
+  // in backgrounds and skin areas. Replace with neighbourhood majority.
+  // 4 passes progressively merges small patches into solid regions.
+  for (let pass = 0; pass < 4; pass++) {
+    for (let r = 1; r < rows - 1; r++) {
+      for (let c = 1; c < cols - 1; c++) {
+        const i = r * cols + c;
+        const cur = indexed[i];
+        const nbrs = [
+          indexed[(r - 1) * cols + (c - 1)],
+          indexed[(r - 1) * cols + c],
+          indexed[(r - 1) * cols + (c + 1)],
+          indexed[r * cols + (c - 1)],
+          indexed[r * cols + (c + 1)],
+          indexed[(r + 1) * cols + (c - 1)],
+          indexed[(r + 1) * cols + c],
+          indexed[(r + 1) * cols + (c + 1)],
+        ];
+        // Replace if this colour appears in ≤ 1 of the 8 neighbours
+        const matchCount = nbrs.filter((n) => n === cur).length;
+        if (matchCount <= 1) {
+          const freq = {};
+          nbrs.forEach((n) => {
+            freq[n] = (freq[n] || 0) + 1;
+          });
+          indexed[i] = +Object.keys(freq).reduce((a, b) =>
+            freq[a] > freq[b] ? a : b,
+          );
+        }
+      }
+    }
+  }
 
   return { indexed, activePens, rows, cols };
 }
