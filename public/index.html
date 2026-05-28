@@ -110,10 +110,18 @@
                 gap: 1.5rem;
                 align-items: start;
             }
-            @media (max-width: 720px) {
-                .layout {
-                    grid-template-columns: 1fr;
-                }
+            .workspace {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 320px;
+                gap: 1.5rem;
+                align-items: start;
+            }
+            .preview-column {
+                min-width: 0;
+            }
+            .settings-panel {
+                position: sticky;
+                top: 1.5rem;
             }
 
             /* ── Panel ── */
@@ -659,7 +667,65 @@
                         <div class="file-list" id="fileList"></div>
                     </div>
 
-                    <div class="panel">
+                </div>
+
+                <!-- ── Right: output ── -->
+                <div class="workspace">
+                    <div class="preview-column">
+                        <div id="emptyState" class="output-empty">
+                            <span class="empty-icon">▦</span>
+                            <span>Your puzzle will appear here</span>
+                        </div>
+
+                        <div id="resultArea" style="display: none">
+                            <div class="tabs">
+                                <button class="tab active" data-tab="blank">
+                                    Blank puzzle
+                                </button>
+                                <button class="tab" data-tab="answer">
+                                    Answer key
+                                </button>
+                                <button class="tab" data-tab="legend">
+                                    Color legend
+                                </button>
+                            </div>
+
+                            <!-- Page preview (blank + answer tabs) -->
+                            <div
+                                class="page-preview-wrap"
+                                id="pagePreviewWrap"
+                                style="display: none"
+                            >
+                                <canvas id="previewCanvas"></canvas>
+                            </div>
+
+                            <!-- Legend tab content -->
+                            <div id="tab-legend-content" style="display: none">
+                                <div class="legend-panel">
+                                    <div class="legend-header">
+                                        Colors used in this puzzle
+                                    </div>
+                                    <div class="legend-grid" id="legendGrid"></div>
+                                </div>
+                            </div>
+
+                            <div class="fit-info" id="fitInfo"></div>
+
+                            <div class="dl-row">
+                                <button class="dl-btn" id="dlBlank">
+                                    ⬇ Puzzle PDF
+                                </button>
+                                <button class="dl-btn" id="dlAnswer">
+                                    ⬇ Answer PDF
+                                </button>
+                                <button class="dl-btn primary" id="dlFull">
+                                    ⬇ Batch PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel settings-panel">
                         <div class="panel-title">Settings</div>
 
                         <div class="ctrl">
@@ -768,61 +834,6 @@
                         </button>
                         <div class="status" id="status">
                             Upload one or more images to begin.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ── Right: output ── -->
-                <div>
-                    <div id="emptyState" class="output-empty">
-                        <span class="empty-icon">▦</span>
-                        <span>Your puzzle will appear here</span>
-                    </div>
-
-                    <div id="resultArea" style="display: none">
-                        <div class="tabs">
-                            <button class="tab active" data-tab="blank">
-                                Blank puzzle
-                            </button>
-                            <button class="tab" data-tab="answer">
-                                Answer key
-                            </button>
-                            <button class="tab" data-tab="legend">
-                                Color legend
-                            </button>
-                        </div>
-
-                        <!-- Page preview (blank + answer tabs) -->
-                        <div
-                            class="page-preview-wrap"
-                            id="pagePreviewWrap"
-                            style="display: none"
-                        >
-                            <canvas id="previewCanvas"></canvas>
-                        </div>
-
-                        <!-- Legend tab content -->
-                        <div id="tab-legend-content" style="display: none">
-                            <div class="legend-panel">
-                                <div class="legend-header">
-                                    Colors used in this puzzle
-                                </div>
-                                <div class="legend-grid" id="legendGrid"></div>
-                            </div>
-                        </div>
-
-                        <div class="fit-info" id="fitInfo"></div>
-
-                        <div class="dl-row">
-                            <button class="dl-btn" id="dlBlank">
-                                ⬇ Puzzle PDF
-                            </button>
-                            <button class="dl-btn" id="dlAnswer">
-                                ⬇ Answer PDF
-                            </button>
-                            <button class="dl-btn primary" id="dlFull">
-                                ⬇ Batch PDF
-                            </button>
                         </div>
                     </div>
                 </div>
