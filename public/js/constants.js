@@ -1,0 +1,36 @@
+export const PAGE_SIZES = {
+    a4p: { w: 210, h: 297 },
+    a4l: { w: 297, h: 210 },
+    ltp: { w: 215.9, h: 279.4 },
+    ltl: { w: 279.4, h: 215.9 },
+    a3p: { w: 297, h: 420 },
+};
+
+export const MARGIN_MM = 12;
+export const DEFAULT_BORDER_MM = 1.2;
+export const PEN_COLORS = [
+    { name: "Black", hex: "#1a1a1a", rgb: [26, 26, 26] },
+    { name: "Dark Gray", hex: "#5a5a5a", rgb: [90, 90, 90] },
+    { name: "Light Gray", hex: "#b8b8b8", rgb: [184, 184, 184] },
+    { name: "Brown", hex: "#7b4a2c", rgb: [123, 74, 44] },
+    { name: "Dark Brown", hex: "#4a2510", rgb: [74, 37, 16] },
+    { name: "Beige", hex: "#e8d5b0", rgb: [232, 213, 176] },
+    { name: "Red", hex: "#e02020", rgb: [224, 32, 32] },
+    { name: "Dark Red", hex: "#8b1a1a", rgb: [139, 26, 26] },
+    { name: "Pink", hex: "#f48cb0", rgb: [244, 140, 176] },
+    { name: "Orange", hex: "#f07820", rgb: [240, 120, 32] },
+    { name: "Yellow", hex: "#f5d800", rgb: [245, 216, 0] },
+    { name: "Lime Green", hex: "#8bc820", rgb: [139, 200, 32] },
+    { name: "Green", hex: "#28a030", rgb: [40, 160, 48] },
+    { name: "Dark Green", hex: "#145a1e", rgb: [20, 90, 30] },
+    { name: "Teal", hex: "#00a89a", rgb: [0, 168, 154] },
+    { name: "Sky Blue", hex: "#60c8f0", rgb: [96, 200, 240] },
+    { name: "Blue", hex: "#1868c0", rgb: [24, 104, 192] },
+    { name: "Dark Blue", hex: "#0a2d7a", rgb: [10, 45, 122] },
+    { name: "Indigo", hex: "#4040a8", rgb: [64, 64, 168] },
+    { name: "Violet", hex: "#8040c0", rgb: [128, 64, 192] },
+    { name: "Purple", hex: "#b028b0", rgb: [176, 40, 176] },
+    { name: "Magenta", hex: "#e030a0", rgb: [224, 48, 160] },
+    { name: "White", hex: "#f8f8f5", rgb: [248, 248, 245] },
+    { name: "Skin", hex: "#f5c89a", rgb: [245, 200, 154] },
+];

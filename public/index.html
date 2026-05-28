@@ -229,7 +229,8 @@
                 border: 2px solid var(--surface);
                 box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
             }
-            input[type="text"] {
+            input[type="text"],
+            input[type="number"] {
                 width: 100%;
                 padding: 7px 10px;
                 font-size: 0.73rem;
@@ -240,8 +241,50 @@
                 outline: none;
                 font-family: var(--mono);
             }
-            input[type="text"]:focus {
+            input[type="text"]:focus,
+            input[type="number"]:focus {
                 border-color: var(--accent);
+            }
+            input[type="number"] {
+                appearance: textfield;
+            }
+            input[type="number"]::-webkit-outer-spin-button,
+            input[type="number"]::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+            .file-meta {
+                margin-top: 0.8rem;
+                font-size: 0.66rem;
+                color: var(--ink2);
+            }
+            .file-list {
+                margin-top: 0.55rem;
+                display: grid;
+                gap: 0.35rem;
+                max-height: 132px;
+                overflow: auto;
+            }
+            .file-pill {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 0.42rem 0.55rem;
+                border-radius: 6px;
+                background: var(--bg);
+                border: 1px solid var(--border2);
+                font-size: 0.62rem;
+                color: var(--ink2);
+                font-family: var(--mono);
+                text-align: left;
+                cursor: pointer;
+            }
+            .file-pill.active {
+                border-color: rgba(200, 85, 61, 0.4);
+                background: rgba(200, 85, 61, 0.08);
+                color: var(--ink);
             }
 
             /* ── Palette ── */
@@ -601,14 +644,19 @@
                                 type="file"
                                 id="fileInput"
                                 accept="image/*"
+                                multiple
                             />
                             <span class="upload-icon">⬆</span>
-                            <p>Click or drag a photo here</p>
+                            <p>Click or drag images here</p>
                             <p class="sub">
-                                JPG · PNG · WEBP &nbsp;·&nbsp; portraits work
-                                best
+                                JPG · PNG · WEBP &nbsp;·&nbsp; single image or
+                                batch import
                             </p>
                         </div>
+                        <div class="file-meta" id="fileMeta">
+                            No images selected.
+                        </div>
+                        <div class="file-list" id="fileList"></div>
                     </div>
 
                     <div class="panel">
@@ -639,6 +687,13 @@
                         </div>
 
                         <div class="ctrl">
+                            <div class="ctrl-label">Generator style</div>
+                            <select class="page-size-select" id="generatorMode">
+                                <option value="mosaic">Mosaic color by number</option>
+                                <option value="sketch">Sketch drawing guide</option>
+                            </select>
+                        </div>
+                        <div class="ctrl">
                             <div class="ctrl-label">
                                 Grid columns <b id="colsVal">35</b>
                             </div>
@@ -667,12 +722,33 @@
                             />
                         </div>
                         <div class="ctrl">
+                            <div class="ctrl-label">Grid border (mm)</div>
+                            <input
+                                type="number"
+                                id="borderMm"
+                                min="0"
+                                max="6"
+                                step="0.1"
+                                value="1.2"
+                            />
+                        </div>
+                        <div class="ctrl">
                             <div class="ctrl-label">Page label</div>
                             <input
                                 type="text"
                                 id="pageLabel"
-                                placeholder="e.g. Page 1 — ???"
+                                placeholder="e.g. Landscapes"
                             />
+                        </div>
+                        <div class="ctrl">
+                            <div class="ctrl-label">Answer page images</div>
+                            <select
+                                class="page-size-select"
+                                id="answerSheetMode"
+                            >
+                                <option value="original">Original pictures</option>
+                                <option value="generated">Generated answers</option>
+                            </select>
                         </div>
 
                         <div class="panel-title" style="margin-top: 1rem">
@@ -681,17 +757,17 @@
                         <div class="palette-strip" id="paletteStrip"></div>
 
                         <button class="btn-gen" id="generateBtn" disabled>
-                            <span id="btnText">Generate puzzle</span>
+                            <span id="btnText">Generate preview</span>
                             <div class="spinner" id="spinner"></div>
                         </button>
                         <div class="progress-wrap" id="progressWrap">
                             <div class="progress-bar" id="progressBar"></div>
                         </div>
                         <button class="btn-sec" id="dlAllBtn" disabled>
-                            ⬇ Download full PDF
+                            ⬇ Download batch PDF
                         </button>
                         <div class="status" id="status">
-                            Upload a photo to begin.
+                            Upload one or more images to begin.
                         </div>
                     </div>
                 </div>
@@ -745,644 +821,13 @@
                                 ⬇ Answer PDF
                             </button>
                             <button class="dl-btn primary" id="dlFull">
-                                ⬇ Full PDF
+                                ⬇ Batch PDF
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <script>
-            // ── Page sizes ────────────────────────────────────────────────────────────
-            const PAGE_SIZES = {
-                a4p: { w: 210, h: 297 },
-                a4l: { w: 297, h: 210 },
-                ltp: { w: 215.9, h: 279.4 },
-                ltl: { w: 279.4, h: 215.9 },
-                a3p: { w: 297, h: 420 },
-            };
-            const MARGIN_MM = 10;
-
-            // ── PEN_COLORS (copy from server — needed for client-side legend) ──────────
-            const PEN_COLORS = [
-                { name: "Black", hex: "#1a1a1a", rgb: [26, 26, 26] },
-                { name: "Dark Gray", hex: "#5a5a5a", rgb: [90, 90, 90] },
-                { name: "Light Gray", hex: "#b8b8b8", rgb: [184, 184, 184] },
-                { name: "Brown", hex: "#7b4a2c", rgb: [123, 74, 44] },
-                { name: "Dark Brown", hex: "#4a2510", rgb: [74, 37, 16] },
-                { name: "Beige", hex: "#e8d5b0", rgb: [232, 213, 176] },
-                { name: "Red", hex: "#e02020", rgb: [224, 32, 32] },
-                { name: "Dark Red", hex: "#8b1a1a", rgb: [139, 26, 26] },
-                { name: "Pink", hex: "#f48cb0", rgb: [244, 140, 176] },
-                { name: "Orange", hex: "#f07820", rgb: [240, 120, 32] },
-                { name: "Yellow", hex: "#f5d800", rgb: [245, 216, 0] },
-                { name: "Lime Green", hex: "#8bc820", rgb: [139, 200, 32] },
-                { name: "Green", hex: "#28a030", rgb: [40, 160, 48] },
-                { name: "Dark Green", hex: "#145a1e", rgb: [20, 90, 30] },
-                { name: "Teal", hex: "#00a89a", rgb: [0, 168, 154] },
-                { name: "Sky Blue", hex: "#60c8f0", rgb: [96, 200, 240] },
-                { name: "Blue", hex: "#1868c0", rgb: [24, 104, 192] },
-                { name: "Dark Blue", hex: "#0a2d7a", rgb: [10, 45, 122] },
-                { name: "Indigo", hex: "#4040a8", rgb: [64, 64, 168] },
-                { name: "Violet", hex: "#8040c0", rgb: [128, 64, 192] },
-                { name: "Purple", hex: "#b028b0", rgb: [176, 40, 176] },
-                { name: "Magenta", hex: "#e030a0", rgb: [224, 48, 160] },
-                { name: "White", hex: "#f8f8f5", rgb: [248, 248, 245] },
-                { name: "Skin", hex: "#f5c89a", rgb: [245, 200, 154] },
-            ];
-
-            // ── Palette dots ──────────────────────────────────────────────────────────
-            const strip = document.getElementById("paletteStrip");
-            PEN_COLORS.forEach((c, i) => {
-                const d = document.createElement("div");
-                d.className = "pdot";
-                d.style.background = c.hex;
-                d.innerHTML = `<span class="tip">${i + 1}. ${c.name}</span>`;
-                strip.appendChild(d);
-            });
-
-            // ── Sliders ───────────────────────────────────────────────────────────────
-            [
-                ["colsSlider", "colsVal"],
-                ["colorsSlider", "colorsVal"],
-            ].forEach(([sid, vid]) => {
-                const s = document.getElementById(sid),
-                    v = document.getElementById(vid);
-                s.addEventListener("input", () => {
-                    v.textContent = s.value;
-                    updateCellChip();
-                });
-            });
-
-            function getPageDims() {
-                const key = document.getElementById("pageSizeSelect").value;
-                return PAGE_SIZES[key] || PAGE_SIZES.a4p;
-            }
-
-            function updateCellChip() {
-                const ps = getPageDims();
-                const cols =
-                    parseInt(document.getElementById("colsSlider").value) || 35;
-                const cellMm = (ps.w - 2 * MARGIN_MM) / cols;
-                document.getElementById("cellChip").textContent =
-                    `Cell: ${cellMm.toFixed(1)} mm · ${ps.w}×${ps.h} mm page`;
-            }
-
-            document
-                .getElementById("pageSizeSelect")
-                .addEventListener("change", () => {
-                    updateCellChip();
-                    if (lastData) drawPreview();
-                });
-
-            updateCellChip();
-
-            // ── Upload ────────────────────────────────────────────────────────────────
-            let currentFile = null;
-            const fileInput = document.getElementById("fileInput");
-            const dropzone = document.getElementById("dropzone");
-            const thumb = document.getElementById("thumb");
-            const generateBtn = document.getElementById("generateBtn");
-
-            function loadFile(file) {
-                if (!file || !file.type.startsWith("image/")) return;
-                currentFile = file;
-                const url = URL.createObjectURL(file);
-                thumb.src = url;
-                thumb.style.display = "block";
-                generateBtn.disabled = false;
-                setStatus("Photo ready. Adjust settings then generate.", "");
-            }
-
-            fileInput.addEventListener("change", (e) =>
-                loadFile(e.target.files[0]),
-            );
-            dropzone.addEventListener("dragover", (e) => {
-                e.preventDefault();
-                dropzone.classList.add("drag");
-            });
-            dropzone.addEventListener("dragleave", () =>
-                dropzone.classList.remove("drag"),
-            );
-            dropzone.addEventListener("drop", (e) => {
-                e.preventDefault();
-                dropzone.classList.remove("drag");
-                loadFile(e.dataTransfer.files[0]);
-            });
-
-            // ── Tabs ──────────────────────────────────────────────────────────────────
-            let currentTab = "blank";
-            document.querySelectorAll(".tab").forEach((btn) => {
-                btn.addEventListener("click", () => {
-                    document
-                        .querySelectorAll(".tab")
-                        .forEach((b) => b.classList.remove("active"));
-                    btn.classList.add("active");
-                    currentTab = btn.dataset.tab;
-                    updateTabView();
-                });
-            });
-
-            function updateTabView() {
-                const previewWrap = document.getElementById("pagePreviewWrap");
-                const legendWrap =
-                    document.getElementById("tab-legend-content");
-                const fitInfo = document.getElementById("fitInfo");
-                if (currentTab === "legend") {
-                    previewWrap.style.display = "none";
-                    legendWrap.style.display = "block";
-                    fitInfo.style.display = "none";
-                } else {
-                    previewWrap.style.display = "flex";
-                    legendWrap.style.display = "none";
-                    fitInfo.style.display = "block";
-                    drawPreview();
-                }
-            }
-
-            // ── Status ────────────────────────────────────────────────────────────────
-            function setStatus(msg, type = "") {
-                const el = document.getElementById("status");
-                el.textContent = msg;
-                el.className = "status" + (type ? " " + type : "");
-            }
-
-            // ── State ─────────────────────────────────────────────────────────────────
-            let lastData = null;
-
-            // ── Progress ──────────────────────────────────────────────────────────────
-            function animateProgress() {
-                const bar = document.getElementById("progressBar");
-                let w = 0;
-                const iv = setInterval(() => {
-                    w = Math.min(w + Math.random() * 8, 88);
-                    bar.style.width = w + "%";
-                    if (w >= 88) clearInterval(iv);
-                }, 120);
-            }
-
-            // ── Generate ──────────────────────────────────────────────────────────────
-            generateBtn.addEventListener("click", async () => {
-                if (!currentFile) return;
-
-                generateBtn.disabled = true;
-                document.getElementById("btnText").style.display = "none";
-                document.getElementById("spinner").style.display = "block";
-                document.getElementById("progressWrap").style.display = "block";
-                animateProgress();
-                setStatus("Sending to server…");
-
-                try {
-                    const ps = getPageDims();
-                    const fd = new FormData();
-                    fd.append("photo", currentFile);
-                    fd.append(
-                        "cols",
-                        document.getElementById("colsSlider").value,
-                    );
-                    fd.append(
-                        "nColors",
-                        document.getElementById("colorsSlider").value,
-                    );
-                    fd.append("pageW", ps.w);
-                    fd.append("pageH", ps.h);
-                    fd.append("margin", MARGIN_MM);
-
-                    const res = await fetch("/api/generate", {
-                        method: "POST",
-                        body: fd,
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || "Server error");
-
-                    lastData = data;
-                    renderResult(data);
-                    setStatus(
-                        `Done! ${data.cols}×${data.rows} grid · ${data.activePens.length} colors · cell ${data.cellSizeMm.toFixed(1)}mm`,
-                        "ok",
-                    );
-                } catch (err) {
-                    setStatus("Error: " + err.message, "err");
-                } finally {
-                    generateBtn.disabled = false;
-                    document.getElementById("btnText").style.display = "";
-                    document.getElementById("spinner").style.display = "none";
-                    document.getElementById("progressWrap").style.display =
-                        "none";
-                    document.getElementById("progressBar").style.width = "0%";
-                }
-            });
-
-            // ── Render result (legend + preview) ─────────────────────────────────────
-            function renderResult(data) {
-                // Legend
-                const legendGrid = document.getElementById("legendGrid");
-                legendGrid.innerHTML = "";
-                data.activePens.forEach((pen, i) => {
-                    const [rr, gg, bb] = pen.rgb;
-                    const lum = 0.299 * rr + 0.587 * gg + 0.114 * bb;
-                    const numColor = lum > 145 ? "#2a2a2a" : "#fff";
-                    const item = document.createElement("div");
-                    item.className = "legend-item";
-                    item.innerHTML = `
-      <div class="legend-swatch" style="background:${pen.hex}; color:${numColor}">${i + 1}</div>
-      <span class="legend-name">${pen.name}</span>`;
-                    legendGrid.appendChild(item);
-                });
-
-                // Show result area, reset to blank tab
-                document.getElementById("emptyState").style.display = "none";
-                document.getElementById("resultArea").style.display = "block";
-                document.getElementById("dlAllBtn").disabled = false;
-
-                // Ensure blank tab is active
-                document
-                    .querySelectorAll(".tab")
-                    .forEach((b) => b.classList.remove("active"));
-                document
-                    .querySelector('.tab[data-tab="blank"]')
-                    .classList.add("active");
-                currentTab = "blank";
-                updateTabView();
-            }
-
-            // ── Draw page preview canvas ──────────────────────────────────────────────
-            function drawPreview() {
-                if (
-                    !lastData ||
-                    (currentTab !== "blank" && currentTab !== "answer")
-                )
-                    return;
-
-                const {
-                    indexed,
-                    activePens,
-                    rows,
-                    cols,
-                    cellSizeMm,
-                    pageW,
-                    pageH,
-                    margin,
-                    rowsFit,
-                } = lastData;
-                const canvas = document.getElementById("previewCanvas");
-                const wrap = document.getElementById("pagePreviewWrap");
-
-                // Compute scale so the page fits inside the container
-                const availW = Math.max(200, wrap.clientWidth - 40);
-                const availH = Math.max(
-                    200,
-                    Math.min(720, window.innerHeight * 0.65),
-                );
-                const scale = Math.min(availW / pageW, availH / pageH);
-
-                canvas.width = Math.round(pageW * scale);
-                canvas.height = Math.round(pageH * scale);
-
-                const ctx = canvas.getContext("2d");
-                const W = canvas.width,
-                    H = canvas.height;
-                const mx = margin * scale; // margin in px
-                const my = margin * scale;
-                const cellPx = cellSizeMm * scale; // cell size in px
-                const gridW = cols * cellPx;
-                const gridH = rows * cellPx;
-                const mode = currentTab; // 'blank' | 'answer'
-
-                // Page (white background)
-                ctx.clearRect(0, 0, W, H);
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, W, H);
-
-                // Draw cells
-                if (mode === "answer") {
-                    for (let r = 0; r < rows; r++) {
-                        for (let c = 0; c < cols; c++) {
-                            const pidx = indexed[r * cols + c];
-                            ctx.fillStyle = activePens[pidx].hex;
-                            ctx.fillRect(
-                                mx + c * cellPx,
-                                my + r * cellPx,
-                                cellPx,
-                                cellPx,
-                            );
-                        }
-                    }
-                } else {
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(mx, my, gridW, gridH);
-                }
-
-                // Grid lines
-                ctx.strokeStyle =
-                    mode === "answer"
-                        ? "rgba(0,0,0,0.18)"
-                        : "rgba(150,140,130,0.9)";
-                ctx.lineWidth = Math.max(0.3, scale * 0.09);
-                ctx.beginPath();
-                for (let r = 0; r <= rows; r++) {
-                    const y = my + r * cellPx;
-                    ctx.moveTo(mx, y);
-                    ctx.lineTo(mx + gridW, y);
-                }
-                for (let c = 0; c <= cols; c++) {
-                    const x = mx + c * cellPx;
-                    ctx.moveTo(x, my);
-                    ctx.lineTo(x, my + gridH);
-                }
-                ctx.stroke();
-
-                // Numbers (blank mode, only if cells are big enough)
-                if (mode === "blank" && cellPx >= 6) {
-                    const fontSize = Math.max(3, cellPx * 0.48);
-                    ctx.font = `${fontSize}px DM Mono, monospace`;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillStyle = "rgba(0,0,0,0.28)";
-                    for (let r = 0; r < rows; r++) {
-                        for (let c = 0; c < cols; c++) {
-                            const pidx = indexed[r * cols + c];
-                            ctx.fillText(
-                                pidx + 1,
-                                mx + c * cellPx + cellPx / 2,
-                                my + r * cellPx + cellPx / 2,
-                            );
-                        }
-                    }
-                }
-
-                // Page-break indicator (overflow)
-                if (rows > rowsFit) {
-                    const breakY = my + rowsFit * cellPx;
-                    ctx.save();
-                    ctx.strokeStyle = "rgba(200,60,30,0.9)";
-                    ctx.lineWidth = 1.5;
-                    ctx.setLineDash([5, 3]);
-                    ctx.beginPath();
-                    ctx.moveTo(mx, breakY);
-                    ctx.lineTo(mx + gridW, breakY);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.fillStyle = "rgba(200,60,30,0.9)";
-                    ctx.font = `bold 9px DM Mono, monospace`;
-                    ctx.textAlign = "right";
-                    ctx.textBaseline = "top";
-                    ctx.fillText("page break", mx + gridW - 2, breakY + 2);
-                    ctx.restore();
-                }
-
-                // Thin page border
-                ctx.strokeStyle = "rgba(0,0,0,0.1)";
-                ctx.lineWidth = 0.5;
-                ctx.strokeRect(0.25, 0.25, W - 0.5, H - 0.5);
-
-                // Update fit info
-                const fitEl = document.getElementById("fitInfo");
-                const overflow = rows - rowsFit;
-                const cellStr = cellSizeMm.toFixed(1);
-                if (overflow <= 0) {
-                    fitEl.innerHTML = `Grid: <b>${cols} × ${rows}</b> &nbsp;·&nbsp; Cell: <b>${cellStr} mm</b> &nbsp;·&nbsp; <span class="fit-ok">✓ Fits on 1 page</span>`;
-                } else {
-                    fitEl.innerHTML = `Grid: <b>${cols} × ${rows}</b> &nbsp;·&nbsp; Cell: <b>${cellStr} mm</b> &nbsp;·&nbsp; <span class="fit-warn">⚠ ${overflow} row${overflow > 1 ? "s" : ""} overflow — try more columns or landscape</span>`;
-                }
-            }
-
-            // Redraw on window resize
-            window.addEventListener("resize", () => {
-                if (lastData) drawPreview();
-            });
-
-            // ── Client-side grid canvas (for PDF) ─────────────────────────────────────
-            function makeGridCanvas(mode) {
-                // Render at 150 DPI quality
-                const PDF_PX_MM = 150 / 25.4; // ≈ 5.906 px per mm
-                const { indexed, activePens, rows, cols, cellSizeMm } =
-                    lastData;
-                const cellPx = Math.max(8, Math.round(cellSizeMm * PDF_PX_MM));
-                const W = cols * cellPx,
-                    H = rows * cellPx;
-
-                const c = document.createElement("canvas");
-                c.width = W;
-                c.height = H;
-                const ctx = c.getContext("2d");
-
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, W, H);
-
-                if (mode === "answer") {
-                    for (let r = 0; r < rows; r++) {
-                        for (let c2 = 0; c2 < cols; c2++) {
-                            const pidx = indexed[r * cols + c2];
-                            ctx.fillStyle = activePens[pidx].hex;
-                            ctx.fillRect(
-                                c2 * cellPx + 1,
-                                r * cellPx + 1,
-                                cellPx - 1,
-                                cellPx - 1,
-                            );
-                        }
-                    }
-                } else {
-                    // Numbers
-                    const fontSize = Math.max(5, Math.round(cellPx * 0.5));
-                    ctx.font = `${fontSize}px DM Mono, monospace`;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillStyle = "rgba(0,0,0,0.28)";
-                    for (let r = 0; r < rows; r++) {
-                        for (let c2 = 0; c2 < cols; c2++) {
-                            const pidx = indexed[r * cols + c2];
-                            ctx.fillText(
-                                pidx + 1,
-                                c2 * cellPx + cellPx / 2,
-                                r * cellPx + cellPx / 2,
-                            );
-                        }
-                    }
-                }
-
-                // Grid lines
-                ctx.strokeStyle =
-                    mode === "answer"
-                        ? "rgba(0,0,0,0.2)"
-                        : "rgba(140,130,120,1)";
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                for (let r = 0; r <= rows; r++) {
-                    ctx.moveTo(0, r * cellPx);
-                    ctx.lineTo(W, r * cellPx);
-                }
-                for (let c2 = 0; c2 <= cols; c2++) {
-                    ctx.moveTo(c2 * cellPx, 0);
-                    ctx.lineTo(c2 * cellPx, H);
-                }
-                ctx.stroke();
-
-                return c;
-            }
-
-            // ── PDF generation ─────────────────────────────────────────────────────────
-            async function makePDF(opts = { blank: true, answer: true }) {
-                if (!lastData) return;
-                await document.fonts.ready; // ensure fonts are loaded for canvas text
-
-                const { jsPDF } = window.jspdf;
-                const {
-                    activePens,
-                    rows,
-                    cols,
-                    cellSizeMm,
-                    pageW,
-                    pageH,
-                    margin,
-                    printableW,
-                    printableH,
-                } = lastData;
-
-                const orientation = pageW >= pageH ? "landscape" : "portrait";
-                const pdf = new jsPDF({
-                    orientation,
-                    unit: "mm",
-                    format: [pageW, pageH],
-                });
-
-                const gridWmm = cols * cellSizeMm;
-                const gridHmm = rows * cellSizeMm;
-                const label = document.getElementById("pageLabel").value.trim();
-
-                // Legend height estimate (2 rows of swatches, 7mm each + 12mm header)
-                const LEGEND_ROW_H = 7;
-                const LEGEND_HEADER_H = 10;
-                const perLegRow = Math.floor(printableW / 34);
-                const legendRows = Math.ceil(activePens.length / perLegRow);
-                const legendH = LEGEND_HEADER_H + legendRows * LEGEND_ROW_H;
-
-                function addPageLabel(p, text) {
-                    if (!text) return;
-                    p.setFontSize(9);
-                    p.setTextColor(40, 30, 20);
-                    p.text(text, pageW / 2, margin * 0.65, { align: "center" });
-                }
-
-                function addLegend(p, yStart) {
-                    p.setFontSize(6);
-                    p.setTextColor(120, 110, 100);
-                    p.text("Color Key:", margin, yStart + 5);
-                    const swatchSz = 4.5;
-                    activePens.forEach((pen, i) => {
-                        const col = i % perLegRow;
-                        const row = Math.floor(i / perLegRow);
-                        const lx = margin + col * 34;
-                        const ly =
-                            yStart + LEGEND_HEADER_H + row * LEGEND_ROW_H;
-                        const [r, g, b] = pen.rgb;
-                        p.setFillColor(r, g, b);
-                        p.setDrawColor(80, 70, 60);
-                        p.setLineWidth(0.15);
-                        p.rect(lx, ly, swatchSz, swatchSz, "FD");
-                        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-                        const tc = lum > 145 ? 40 : 255;
-                        p.setTextColor(tc, tc, tc);
-                        p.setFontSize(3.5);
-                        p.text(
-                            String(i + 1),
-                            lx + swatchSz / 2,
-                            ly + swatchSz - 0.5,
-                            { align: "center" },
-                        );
-                        p.setTextColor(50, 40, 30);
-                        p.setFontSize(5.5);
-                        p.text(
-                            pen.name,
-                            lx + swatchSz + 1.5,
-                            ly + swatchSz - 0.5,
-                        );
-                    });
-                }
-
-                function addGridPage(p, mode, isFirst) {
-                    if (!isFirst) p.addPage([pageW, pageH]);
-
-                    const topMarginExtra = label ? 4 : 0;
-                    addPageLabel(p, label);
-
-                    const imgCanvas = makeGridCanvas(mode);
-                    const imgData = imgCanvas.toDataURL("image/png");
-                    p.addImage(
-                        imgData,
-                        "PNG",
-                        margin,
-                        margin + topMarginExtra,
-                        gridWmm,
-                        gridHmm,
-                    );
-
-                    // Add legend below grid if there is space
-                    const usedBottom = margin + topMarginExtra + gridHmm;
-                    const spaceBelow = pageH - usedBottom - margin;
-                    if (spaceBelow >= legendH + 2) {
-                        addLegend(p, usedBottom + 2);
-                    }
-
-                    // Page label in footer corner
-                    p.setFontSize(5);
-                    p.setTextColor(180, 170, 160);
-                    const modeLabel =
-                        mode === "blank" ? "Color by Number" : "Answer Key";
-                    p.text(modeLabel, margin, pageH - margin * 0.5);
-                }
-
-                let first = true;
-                if (opts.blank) {
-                    addGridPage(pdf, "blank", first);
-                    first = false;
-                }
-                if (opts.answer) {
-                    addGridPage(pdf, "answer", first);
-                    first = false;
-                }
-
-                const filename = (label || "puzzle") + ".pdf";
-                pdf.save(filename);
-            }
-
-            // ── Download buttons ───────────────────────────────────────────────────────
-            document
-                .getElementById("dlBlank")
-                .addEventListener("click", async () => {
-                    if (!lastData) return;
-                    document.getElementById("dlBlank").textContent = "…";
-                    await makePDF({ blank: true, answer: false });
-                    document.getElementById("dlBlank").textContent =
-                        "⬇ Puzzle PDF";
-                });
-
-            document
-                .getElementById("dlAnswer")
-                .addEventListener("click", async () => {
-                    if (!lastData) return;
-                    document.getElementById("dlAnswer").textContent = "…";
-                    await makePDF({ blank: false, answer: true });
-                    document.getElementById("dlAnswer").textContent =
-                        "⬇ Answer PDF";
-                });
-
-            document
-                .getElementById("dlFull")
-                .addEventListener("click", async () => {
-                    if (!lastData) return;
-                    document.getElementById("dlFull").textContent = "…";
-                    await makePDF({ blank: true, answer: true });
-                    document.getElementById("dlFull").textContent =
-                        "⬇ Full PDF";
-                });
-
-            document
-                .getElementById("dlAllBtn")
-                .addEventListener("click", () => {
-                    document.getElementById("dlFull").click();
-                });
-        </script>
+        <script type="module" src="/js/main.js"></script>
     </body>
 </html>
